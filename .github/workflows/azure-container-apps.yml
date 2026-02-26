@@ -10,7 +10,8 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_RESOURCE_GROUP: rg-yesandai
+  AZURE_CONTAINERAPP_RG: rg-yesandai
+  AZURE_ACR_RG: rg-default
   AZURE_CONTAINER_APP: ca-yesandai-api-prod
   AZURE_ACR_NAME: jsgappsacr
   IMAGE_NAME: yesand-backend
@@ -32,7 +33,7 @@ jobs:
 
       - name: Resolve ACR login server
         id: acr
-        run: echo "login_server=$(az acr show --name ${{ env.AZURE_ACR_NAME }} --query loginServer -o tsv)" >> $GITHUB_OUTPUT
+        run: echo "login_server=$(az acr show --name ${{ env.AZURE_ACR_NAME }} --resource-group ${{ env.AZURE_ACR_RG }} --query loginServer -o tsv)" >> $GITHUB_OUTPUT
 
       - name: Build and push image
         run: az acr build --registry ${{ env.AZURE_ACR_NAME }} --image ${{ env.IMAGE_NAME }}:${{ github.sha }} ./backend
@@ -41,5 +42,5 @@ jobs:
         run: >
           az containerapp update
           --name ${{ env.AZURE_CONTAINER_APP }}
-          --resource-group ${{ env.AZURE_RESOURCE_GROUP }}
+          --resource-group ${{ env.AZURE_CONTAINERAPP_RG }}
           --image ${{ steps.acr.outputs.login_server }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
