@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_RESOURCE_GROUP: your-resource-group
-  AZURE_CONTAINER_APP: your-container-app
-  AZURE_ACR_NAME: your-acr-name
+  AZURE_RESOURCE_GROUP: rg-yesandai
+  AZURE_CONTAINER_APP: ca-yesandai-api-prod
+  AZURE_ACR_NAME: jsgappsacr
   IMAGE_NAME: yesand-backend
 
 jobs:
