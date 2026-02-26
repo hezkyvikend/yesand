@@ -1,0 +1,44 @@
+name: Backend - Azure Container Apps
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/azure-container-apps.yml"
+  workflow_dispatch:
+
+env:
+  AZURE_RESOURCE_GROUP: your-resource-group
+  AZURE_CONTAINER_APP: your-container-app
+  AZURE_ACR_NAME: your-acr-name
+  IMAGE_NAME: yesand-backend
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Install Container Apps extension
+        run: az extension add --name containerapp --upgrade
+
+      - name: Resolve ACR login server
+        id: acr
+        run: echo "login_server=$(az acr show --name ${{ env.AZURE_ACR_NAME }} --query loginServer -o tsv)" >> $GITHUB_OUTPUT
+
+      - name: Build and push image
+        run: az acr build --registry ${{ env.AZURE_ACR_NAME }} --image ${{ env.IMAGE_NAME }}:${{ github.sha }} ./backend
+
+      - name: Deploy to Container Apps
+        run: >
+          az containerapp update
+          --name ${{ env.AZURE_CONTAINER_APP }}
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }}
+          --image ${{ steps.acr.outputs.login_server }}/${{ env.IMAGE_NAME }}:${{ github.sha }}

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/josephgibli/Documents/yesand-claude status)",
+      "Bash(uv --version:*)"
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+.line {
+  white-space: pre-wrap;
+  font-variant-ligatures: none;
+}
+
+.blank {
+  min-height: 1.6em;
+}
+
+.normal {
+  color: var(--green);
+}
+
+.ai {
+  color: var(--green-dim);
+}
+
+.hint {
+  color: var(--green-faint);
+}
+
+.error {
+  color: var(--red);
+}
+
+.cursor {
+  display: inline-block;
+  margin-left: 2px;
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}

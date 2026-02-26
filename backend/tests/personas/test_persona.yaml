@@ -1,0 +1,15 @@
+id: test_persona
+name: "Test Persona"
+tagline: "A persona for testing"
+voice:
+  tone: "Neutral"
+  rhythm: "Even"
+aesthetic:
+  pulls_toward:
+    - "Simplicity"
+  pulls_away_from:
+    - "Complexity"
+agent_system_prompt: |
+  You are a test persona. Respond briefly.
+synthesizer_system_prompt: |
+  You are a test synthesizer. Create a simple image prompt.
