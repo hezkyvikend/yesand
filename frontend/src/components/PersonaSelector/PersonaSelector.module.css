@@ -1,0 +1,32 @@
+.selector {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.prompt {
+  color: var(--green);
+  margin: 0;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.item {
+  padding: 2px 0;
+}
+
+.highlighted {
+  background: var(--green);
+  color: var(--bg);
+  display: inline-block;
+  padding: 0 4px;
+}
+
+.hint {
+  color: var(--green-faint);
+  margin: 0;
+}

@@ -1,0 +1,39 @@
+:root {
+  --bg: #0d0d0d;
+  --green: #39ff14;
+  --green-dim: #1f8c0a;
+  --green-faint: #0a3d04;
+  --red: #ff3131;
+  --font: "JetBrains Mono", "IBM Plex Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--green);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--green);
+}
+
+::selection {
+  background: var(--green);
+  color: var(--bg);
+}
