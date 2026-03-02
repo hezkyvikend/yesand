@@ -65,4 +65,8 @@
     bottom: 12px;
     width: calc(100% - 32px);
   }
+
+  .input {
+    font-size: 16px;
+  }
 }

@@ -29,6 +29,8 @@ function LoadingTranscript({ persona, suggestionWord }) {
   )
 }
 
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+
 function getChatMessageCount(messages) {
   return messages.filter((m) => m.role === 'human' || m.role === 'ai').length
 }
@@ -128,7 +130,7 @@ export function Terminal({
           <MessageHistory messages={state.messages} isStreaming={false} />
           <TerminalLine text="generating image... done." />
           <ImageReveal src={state.imageUrl} revealed />
-          <TerminalLine text="download? [y/n]" />
+          <TerminalLine text={isMobile ? 'hold image to save · press any key to continue' : 'download? [y/n]'} />
         </>
       )}
 

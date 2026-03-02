@@ -7,6 +7,7 @@ const STEP_DURATIONS = [400, 350, 300, 250, 225, 200, 150, 125]
 
 export function ImageReveal({ src, onRevealComplete, revealed = false }) {
   const [loaded, setLoaded] = useState(false)
+  const [done, setDone] = useState(revealed)
   const [stepIndex, setStepIndex] = useState(revealed ? STEPS.length - 1 : 0)
   const onCompleteRef = useRef(onRevealComplete)
   const containerRef = useRef(null)
@@ -36,6 +37,7 @@ export function ImageReveal({ src, onRevealComplete, revealed = false }) {
   useEffect(() => {
     if (!loaded || revealed) return undefined
     if (stepIndex >= STEPS.length - 1) {
+      setDone(true)
       onCompleteRef.current?.()
       return undefined
     }
@@ -59,6 +61,7 @@ export function ImageReveal({ src, onRevealComplete, revealed = false }) {
         height={DISPLAY}
         className={styles.canvas}
       />
+      {done && <img src={src} alt="generated artwork" className={styles.imgOverlay} />}
       <div className={styles.scanlines} />
     </div>
   )

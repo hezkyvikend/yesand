@@ -14,6 +14,8 @@ function getChatMessages(messages) {
   return messages.filter((msg) => msg.role === 'human' || msg.role === 'ai')
 }
 
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+
 async function triggerDownload(imageUrl) {
   if (!imageUrl) return
   try {
@@ -124,13 +126,15 @@ function App() {
         content: `> ${trimmed}`,
         variant: 'normal',
       })
-      const answer = trimmed.toLowerCase()
-      if (answer === 'y') {
-        triggerDownload(state.imageUrl)
-        dispatch({
-          type: 'ADD_SYSTEM_MESSAGE',
-          content: 'downloading image to ~/Downloads...',
-        })
+      if (!isMobile) {
+        const answer = trimmed.toLowerCase()
+        if (answer === 'y') {
+          triggerDownload(state.imageUrl)
+          dispatch({
+            type: 'ADD_SYSTEM_MESSAGE',
+            content: 'downloading image to ~/Downloads...',
+          })
+        }
       }
       dispatch({ type: 'DOWNLOAD_ANSWERED' })
     },
