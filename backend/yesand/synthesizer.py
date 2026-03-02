@@ -7,7 +7,21 @@ from yesand.config import get_text_model
 from yesand.persona import Persona
 
 
-async def synthesize_image_prompt(persona: Persona, history: list[dict]) -> str:
+def _build_trace_config(metadata: dict | None, tags: list[str] | None) -> dict | None:
+    config: dict = {}
+    if metadata:
+        config["metadata"] = metadata
+    if tags:
+        config["tags"] = tags
+    return config or None
+
+
+async def synthesize_image_prompt(
+    persona: Persona,
+    history: list[dict],
+    metadata: dict | None = None,
+    tags: list[str] | None = None,
+) -> str:
     """Convert a conversation into a single DALL-E image generation prompt.
 
     Args:
@@ -29,5 +43,6 @@ async def synthesize_image_prompt(persona: Persona, history: list[dict]) -> str:
     ]
 
     llm = ChatOpenAI(model=get_text_model("gpt-4o"), temperature=0.3)
-    response = await llm.ainvoke(messages)
+    config = _build_trace_config(metadata, tags)
+    response = await llm.ainvoke(messages, config=config)
     return response.content

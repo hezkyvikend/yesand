@@ -41,3 +41,13 @@ def get_image_size() -> str:
 
 def get_image_quality() -> str:
     return get_env("OPENAI_IMAGE_QUALITY", "standard") or "standard"
+
+
+def get_image_cost_usd() -> float | None:
+    raw = get_env("OPENAI_IMAGE_COST_USD")
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None

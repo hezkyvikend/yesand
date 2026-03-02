@@ -18,7 +18,7 @@ class TestGenerateImage:
         mock_client = MagicMock()
         mock_client.images.generate = AsyncMock(return_value=mock_response)
 
-        with patch("yesand.image.AsyncOpenAI", return_value=mock_client):
+        with patch("yesand.image._create_client", return_value=mock_client):
             result = await generate_image("a beautiful sunset")
 
         assert isinstance(result, str)
@@ -31,7 +31,7 @@ class TestGenerateImage:
         mock_client = MagicMock()
         mock_client.images.generate = AsyncMock(return_value=mock_response)
 
-        with patch("yesand.image.AsyncOpenAI", return_value=mock_client):
+        with patch("yesand.image._create_client", return_value=mock_client):
             await generate_image("a cat in a kitchen")
 
         call_kwargs = mock_client.images.generate.call_args[1]
@@ -47,6 +47,6 @@ class TestGenerateImage:
             )
         )
 
-        with patch("yesand.image.AsyncOpenAI", return_value=mock_client):
+        with patch("yesand.image._create_client", return_value=mock_client):
             with pytest.raises(APIError):
                 await generate_image("test prompt")

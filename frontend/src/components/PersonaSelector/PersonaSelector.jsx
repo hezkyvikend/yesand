@@ -12,6 +12,15 @@ export function PersonaSelector({ personas, onSelect }) {
           <li
             key={persona.id}
             className={`${styles.item} ${index === cursor ? styles.highlighted : ''}`}
+            role="button"
+            tabIndex={0}
+            onClick={() => onSelect?.(persona)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                onSelect?.(persona)
+              }
+            }}
           >
             {index === cursor ? '▶ ' : '  '}{persona.name}
           </li>

@@ -17,6 +17,12 @@
 
 .item {
   padding: 2px 0;
+  cursor: pointer;
+}
+
+.item:focus-visible {
+  outline: 1px solid var(--green);
+  outline-offset: 2px;
 }
 
 .highlighted {

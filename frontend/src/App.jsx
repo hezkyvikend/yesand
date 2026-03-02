@@ -2,6 +2,12 @@ import { useCallback, useEffect, useReducer, useState } from 'react'
 import styles from './App.module.css'
 import { fetchPersonas, fetchSuggestion, generateImage, getProxyDownloadUrl, streamChat } from './api'
 import { initialState, sessionReducer } from './state/sessionReducer'
+import {
+  getOrCreateConversationId,
+  getOrCreateSessionId,
+  getOrCreateUserId,
+  startNewConversationId,
+} from './state/identity'
 import { Terminal } from './components/Terminal/Terminal'
 
 function getChatMessages(messages) {
@@ -34,10 +40,13 @@ function App() {
   const [state, dispatch] = useReducer(sessionReducer, initialState)
   const [personas, setPersonas] = useState([])
   const [personaError, setPersonaError] = useState(null)
+  const [userId] = useState(() => getOrCreateUserId())
+  const [sessionId] = useState(() => getOrCreateSessionId())
+  const [conversationId, setConversationId] = useState(() => getOrCreateConversationId())
 
   useEffect(() => {
     let active = true
-    fetchPersonas()
+    fetchPersonas({ userId, sessionId })
       .then((data) => {
         if (!active) return
         setPersonas(data.personas)
@@ -49,11 +58,13 @@ function App() {
     return () => {
       active = false
     }
-  }, [])
+  }, [userId, sessionId])
 
   const handleSelectPersona = useCallback((persona) => {
+    const nextConversationId = startNewConversationId()
+    setConversationId(nextConversationId)
     dispatch({ type: 'SELECT_PERSONA', persona })
-    fetchSuggestion()
+    fetchSuggestion({ userId, sessionId, conversationId: nextConversationId })
       .then((data) => {
         dispatch({ type: 'SET_SUGGESTION', word: data.word })
       })
@@ -61,7 +72,7 @@ function App() {
         dispatch({ type: 'ADD_ERROR_MESSAGE', content: 'error: failed to fetch suggestion' })
         dispatch({ type: 'SET_SUGGESTION', word: '???' })
       })
-  }, [])
+  }, [userId, sessionId])
 
   const handleInput = useCallback(
     (text) => {
@@ -82,9 +93,10 @@ function App() {
           dispatch({ type: 'ADD_ERROR_MESSAGE', content: 'error: chat failed' })
           dispatch({ type: 'END_AI_MESSAGE' })
         },
+        { userId, sessionId, conversationId },
       )
     },
-    [state.isStreaming, state.persona, state.messages],
+    [state.isStreaming, state.persona, state.messages, userId, sessionId, conversationId],
   )
 
   const handleGenerate = useCallback(() => {
@@ -93,7 +105,7 @@ function App() {
     if (!chatMessages.length) return
 
     dispatch({ type: 'GENERATE' })
-    generateImage(state.persona.id, chatMessages)
+    generateImage(state.persona.id, chatMessages, { userId, sessionId, conversationId })
       .then((data) => {
         dispatch({ type: 'IMAGE_READY', imageUrl: data.image_url, promptUsed: data.prompt_used })
       })
@@ -101,7 +113,7 @@ function App() {
         dispatch({ type: 'ADD_ERROR_MESSAGE', content: 'error: generation failed' })
         dispatch({ type: 'GENERATE_FAILED' })
       })
-  }, [state.isStreaming, state.phase, state.persona, state.messages])
+  }, [state.isStreaming, state.phase, state.persona, state.messages, userId, sessionId, conversationId])
 
   const handleDownloadPrompt = useCallback(
     (text) => {
@@ -134,12 +146,9 @@ function App() {
         content: `> ${trimmed}`,
         variant: 'normal',
       })
-      const answer = trimmed.toLowerCase()
-      if (answer === 'y' || answer === 'n') {
-        setTimeout(() => {
-          dispatch({ type: 'RESET' })
-        }, 0)
-      }
+      setTimeout(() => {
+        dispatch({ type: 'RESET' })
+      }, 0)
     },
     [],
   )

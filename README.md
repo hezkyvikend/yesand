@@ -42,8 +42,20 @@ npm run dev
 - `OPENAI_IMAGE_MODEL` should be set to `dall-e-3` to use DALL-E 3.
 - `OPENAI_IMAGE_SIZE` defaults to `1024x1024`.
 - `OPENAI_IMAGE_QUALITY` defaults to `standard` for DALL-E 3.
+- `OPENAI_IMAGE_COST_USD` sets a per-image cost for LangSmith tracking.
 - `OPENAI_TEXT_MODEL` overrides the default text model used for chat and prompt synthesis.
 - `VITE_API_BASE` can be set in `frontend/.env` to point the UI at a different backend (defaults to `http://localhost:8000`).
+- `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`, and `LANGSMITH_ENDPOINT` enable LangSmith monitoring for backend LLM calls.
+
+**LangSmith Monitoring**
+LangChain will emit traces automatically when LangSmith environment variables are set. Add these to `/Users/josephgibli/Documents/yesand/backend/.env`:
+```bash
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=lsv2-your-langsmith-key-here
+LANGSMITH_PROJECT=yesand
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+```
+If your LangSmith API key is linked to multiple workspaces, set `LANGSMITH_WORKSPACE_ID` as well.
 
 **Architecture**
 1. The frontend (Vite + React) loads personas and suggestions from the backend and manages the terminal-style UI.

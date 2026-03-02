@@ -53,6 +53,7 @@ export function Terminal({
 
   const isChatPhase = phase === 'READY' || phase === 'CHATTING'
   const isPromptPhase = phase === 'DONE' || phase === 'FINISHED'
+  const promptPlaceholder = phase === 'DONE' ? 'y / n' : phase === 'FINISHED' ? 'press any key' : 'enter to send...'
   const inputProps = {
     onSubmit: isChatPhase
       ? onInput
@@ -62,7 +63,7 @@ export function Terminal({
           ? onReplayPrompt
           : undefined,
     disabled: (!isChatPhase && !isPromptPhase) || state.isStreaming,
-    placeholder: isPromptPhase ? 'y / n' : 'enter to send...',
+    placeholder: isPromptPhase ? promptPlaceholder : 'enter to send...',
     showGenerate: true,
     generateEnabled: isChatPhase && hasMessages && !state.isStreaming,
     onGenerate,
@@ -136,7 +137,7 @@ export function Terminal({
           <MessageHistory messages={state.messages} isStreaming={false} />
           <TerminalLine text="generating image... done." />
           <ImageReveal src={state.imageUrl} revealed />
-          <TerminalLine text="new scene? [y/n]" />
+          <TerminalLine text="press any key to play again" />
         </>
       )}
 

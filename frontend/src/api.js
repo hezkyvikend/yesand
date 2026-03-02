@@ -1,5 +1,22 @@
 const BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000'
 
+function buildHeaders(context, includeJson = false) {
+  const headers = {}
+  if (includeJson) {
+    headers['Content-Type'] = 'application/json'
+  }
+  if (context?.userId) {
+    headers['X-User-Id'] = context.userId
+  }
+  if (context?.sessionId) {
+    headers['X-Session-Id'] = context.sessionId
+  }
+  if (context?.conversationId) {
+    headers['X-Conversation-Id'] = context.conversationId
+  }
+  return headers
+}
+
 async function readJson(response, errorMessage) {
   if (!response.ok) {
     throw new Error(errorMessage)
@@ -7,20 +24,24 @@ async function readJson(response, errorMessage) {
   return response.json()
 }
 
-export async function fetchPersonas() {
-  const response = await fetch(`${BASE}/personas`)
+export async function fetchPersonas(context) {
+  const response = await fetch(`${BASE}/personas`, {
+    headers: buildHeaders(context),
+  })
   return readJson(response, 'Failed to load personas')
 }
 
-export async function fetchSuggestion() {
-  const response = await fetch(`${BASE}/suggest`)
+export async function fetchSuggestion(context) {
+  const response = await fetch(`${BASE}/suggest`, {
+    headers: buildHeaders(context),
+  })
   return readJson(response, 'Failed to fetch suggestion')
 }
 
-export async function sendMessage(personaId, messages) {
+export async function sendMessage(personaId, messages, context) {
   const response = await fetch(`${BASE}/chat`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: buildHeaders(context, true),
     body: JSON.stringify({ persona_id: personaId, messages }),
   })
   return readJson(response, 'Chat failed')
@@ -30,20 +51,20 @@ export function getProxyDownloadUrl(imageUrl) {
   return `${BASE}/proxy-image?url=${encodeURIComponent(imageUrl)}`
 }
 
-export async function generateImage(personaId, messages) {
+export async function generateImage(personaId, messages, context) {
   const response = await fetch(`${BASE}/generate`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: buildHeaders(context, true),
     body: JSON.stringify({ persona_id: personaId, messages }),
   })
   return readJson(response, 'Generation failed')
 }
 
-export async function streamChat(personaId, messages, onChunk, onDone, onError) {
+export async function streamChat(personaId, messages, onChunk, onDone, onError, context) {
   try {
     const response = await fetch(`${BASE}/chat/stream`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildHeaders(context, true),
       body: JSON.stringify({ persona_id: personaId, messages }),
     })
 

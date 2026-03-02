@@ -9,7 +9,21 @@ from yesand.config import get_text_model
 from yesand.persona import Persona
 
 
-async def run_agent_turn(persona: Persona, history: list[dict]) -> str:
+def _build_trace_config(metadata: dict | None, tags: list[str] | None) -> dict | None:
+    config: dict = {}
+    if metadata:
+        config["metadata"] = metadata
+    if tags:
+        config["tags"] = tags
+    return config or None
+
+
+async def run_agent_turn(
+    persona: Persona,
+    history: list[dict],
+    metadata: dict | None = None,
+    tags: list[str] | None = None,
+) -> str:
     """Run a single yes-and improv turn for the given persona.
 
     Args:
@@ -28,7 +42,8 @@ async def run_agent_turn(persona: Persona, history: list[dict]) -> str:
             messages.append(AIMessage(content=msg["content"]))
 
     llm = ChatOpenAI(model=get_text_model("gpt-4o"), temperature=0.9)
-    response = await llm.ainvoke(messages)
+    config = _build_trace_config(metadata, tags)
+    response = await llm.ainvoke(messages, config=config)
     return ensure_yes_and(response.content)
 
 
@@ -41,7 +56,12 @@ def ensure_yes_and(text: str) -> str:
     return f"yes, and {stripped}"
 
 
-async def stream_agent_turn(persona: Persona, history: list[dict]) -> AsyncGenerator[str, None]:
+async def stream_agent_turn(
+    persona: Persona,
+    history: list[dict],
+    metadata: dict | None = None,
+    tags: list[str] | None = None,
+) -> AsyncGenerator[str, None]:
     """Stream a yes-and improv turn for the given persona.
 
     Yields text chunks as they arrive from the LLM.
@@ -58,7 +78,8 @@ async def stream_agent_turn(persona: Persona, history: list[dict]) -> AsyncGener
     buffer = ""
     started = False
 
-    async for chunk in llm.astream(messages):
+    config = _build_trace_config(metadata, tags)
+    async for chunk in llm.astream(messages, config=config):
         content = getattr(chunk, "content", "")
         if not content:
             continue

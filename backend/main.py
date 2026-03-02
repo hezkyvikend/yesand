@@ -1,6 +1,7 @@
 """FastAPI application for the Yes-And collaborative image chatbot."""
 
 import json
+import uuid
 
 from dotenv import load_dotenv
 
@@ -9,9 +10,9 @@ load_dotenv()
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from yesand.agent import run_agent_turn, stream_agent_turn
@@ -85,6 +86,34 @@ class SuggestResponse(BaseModel):
 # --- Routes ---
 
 
+def build_trace_context(
+    request: Request,
+    persona_id: str | None,
+    route: str,
+    request_id: str | None = None,
+) -> tuple[dict, list[str], str]:
+    user_id = request.headers.get("x-user-id")
+    session_id = request.headers.get("x-session-id")
+    conversation_id = request.headers.get("x-conversation-id")
+    request_id = request_id or request.headers.get("x-request-id") or str(uuid.uuid4())
+
+    metadata = {
+        "user_id": user_id,
+        "session_id": session_id,
+        "conversation_id": conversation_id,
+        "request_id": request_id,
+        "persona_id": persona_id,
+        "route": route,
+    }
+    metadata = {key: value for key, value in metadata.items() if value}
+
+    tags = ["yesand", route]
+    if persona_id:
+        tags.append(f"persona:{persona_id}")
+
+    return metadata, tags, request_id
+
+
 @app.get("/personas", response_model=PersonasResponse)
 async def list_personas():
     """Return metadata for all available personas."""
@@ -105,16 +134,18 @@ async def list_personas():
 
 
 @app.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+async def chat(payload: ChatRequest, request: Request, response: Response):
     """Run a single yes-and conversation turn."""
-    persona = get_persona(request.persona_id)
+    persona = get_persona(payload.persona_id)
     if persona is None:
-        raise HTTPException(status_code=404, detail=f"Unknown persona: {request.persona_id}")
+        raise HTTPException(status_code=404, detail=f"Unknown persona: {payload.persona_id}")
 
-    history = [msg.model_dump() for msg in request.messages]
+    history = [msg.model_dump() for msg in payload.messages]
+    metadata, tags, request_id = build_trace_context(request, payload.persona_id, "chat")
+    response.headers["X-Request-Id"] = request_id
 
     try:
-        reply = await run_agent_turn(persona, history)
+        reply = await run_agent_turn(persona, history, metadata=metadata, tags=tags)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM error: {e}")
 
@@ -122,17 +153,18 @@ async def chat(request: ChatRequest):
 
 
 @app.post("/chat/stream")
-async def chat_stream(request: ChatRequest):
+async def chat_stream(payload: ChatRequest, request: Request):
     """Stream a yes-and conversation turn as server-sent events."""
-    persona = get_persona(request.persona_id)
+    persona = get_persona(payload.persona_id)
     if persona is None:
-        raise HTTPException(status_code=404, detail=f"Unknown persona: {request.persona_id}")
+        raise HTTPException(status_code=404, detail=f"Unknown persona: {payload.persona_id}")
 
-    history = [msg.model_dump() for msg in request.messages]
+    history = [msg.model_dump() for msg in payload.messages]
+    metadata, tags, request_id = build_trace_context(request, payload.persona_id, "chat_stream")
 
     async def event_generator():
         try:
-            async for chunk in stream_agent_turn(persona, history):
+            async for chunk in stream_agent_turn(persona, history, metadata=metadata, tags=tags):
                 payload = {"type": "chunk", "content": chunk}
                 yield f"data: {json.dumps(payload)}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
@@ -143,26 +175,34 @@ async def chat_stream(request: ChatRequest):
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache"},
+        headers={"Cache-Control": "no-cache", "X-Request-Id": request_id},
     )
 
 
 @app.post("/generate", response_model=GenerateResponse)
-async def generate(request: GenerateRequest):
+async def generate(payload: GenerateRequest, request: Request, response: Response):
     """Synthesize an image prompt from conversation and generate the image."""
-    persona = get_persona(request.persona_id)
+    persona = get_persona(payload.persona_id)
     if persona is None:
-        raise HTTPException(status_code=404, detail=f"Unknown persona: {request.persona_id}")
+        raise HTTPException(status_code=404, detail=f"Unknown persona: {payload.persona_id}")
 
-    history = [msg.model_dump() for msg in request.messages]
+    history = [msg.model_dump() for msg in payload.messages]
+    metadata, tags, request_id = build_trace_context(request, payload.persona_id, "synthesize")
+    response.headers["X-Request-Id"] = request_id
 
     try:
-        prompt = await synthesize_image_prompt(persona, history)
+        prompt = await synthesize_image_prompt(persona, history, metadata=metadata, tags=tags)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Synthesizer error: {e}")
 
     try:
-        image_url = await generate_image(prompt)
+        image_metadata, image_tags, _ = build_trace_context(
+            request,
+            payload.persona_id,
+            "image",
+            request_id=request_id,
+        )
+        image_url = await generate_image(prompt, metadata=image_metadata, tags=image_tags)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Image generation error: {e}")
 
