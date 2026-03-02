@@ -29,8 +29,6 @@ function LoadingTranscript({ persona, suggestionWord }) {
   )
 }
 
-const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-
 function getChatMessageCount(messages) {
   return messages.filter((m) => m.role === 'human' || m.role === 'ai').length
 }
@@ -42,7 +40,6 @@ export function Terminal({
   onSelectPersona,
   onInput,
   onGenerate,
-  onDownloadPrompt,
   onReplayPrompt,
   onLoadingComplete,
   onRevealComplete,
@@ -54,18 +51,10 @@ export function Terminal({
   const hasMessages = getChatMessageCount(state.messages) > 0
 
   const isChatPhase = phase === 'READY' || phase === 'CHATTING'
-  const isPromptPhase = phase === 'DONE' || phase === 'FINISHED'
-  const promptPlaceholder = phase === 'DONE' ? 'y / n' : phase === 'FINISHED' ? 'press any key' : 'enter to send...'
   const inputProps = {
-    onSubmit: isChatPhase
-      ? onInput
-      : phase === 'DONE'
-        ? onDownloadPrompt
-        : phase === 'FINISHED'
-          ? onReplayPrompt
-          : undefined,
-    disabled: (!isChatPhase && !isPromptPhase) || state.isStreaming,
-    placeholder: isPromptPhase ? promptPlaceholder : 'enter to send...',
+    onSubmit: isChatPhase ? onInput : phase === 'FINISHED' ? onReplayPrompt : undefined,
+    disabled: (!isChatPhase && phase !== 'FINISHED') || state.isStreaming,
+    placeholder: phase === 'FINISHED' ? 'press any key' : 'enter to send...',
     showGenerate: true,
     generateEnabled: isChatPhase && hasMessages && !state.isStreaming,
     onGenerate,
@@ -122,15 +111,6 @@ export function Terminal({
           <MessageHistory messages={state.messages} isStreaming={false} />
           <TerminalLine text="generating image... done." />
           <ImageReveal src={state.imageUrl} onRevealComplete={onRevealComplete} />
-        </>
-      )}
-
-      {phase === 'DONE' && (
-        <>
-          <MessageHistory messages={state.messages} isStreaming={false} />
-          <TerminalLine text="generating image... done." />
-          <ImageReveal src={state.imageUrl} revealed />
-          <TerminalLine text={isMobile ? 'hold image to save · press any key to continue' : 'download? [y/n]'} />
         </>
       )}
 

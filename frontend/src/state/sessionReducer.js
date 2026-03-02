@@ -94,10 +94,6 @@ export function sessionReducer(state, action) {
 
     case 'REVEAL_COMPLETE':
       if (state.phase !== 'REVEALING') return state
-      return { ...state, phase: 'DONE' }
-
-    case 'DOWNLOAD_ANSWERED':
-      if (state.phase !== 'DONE') return state
       return { ...state, phase: 'FINISHED' }
 
     case 'GENERATE_FAILED':

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useState } from 'react'
 import styles from './App.module.css'
-import { fetchPersonas, fetchSuggestion, generateImage, getProxyDownloadUrl, streamChat } from './api'
+import { fetchPersonas, fetchSuggestion, generateImage, streamChat } from './api'
 import { initialState, sessionReducer } from './state/sessionReducer'
 import {
   getOrCreateConversationId,
@@ -12,30 +12,6 @@ import { Terminal } from './components/Terminal/Terminal'
 
 function getChatMessages(messages) {
   return messages.filter((msg) => msg.role === 'human' || msg.role === 'ai')
-}
-
-const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-
-async function triggerDownload(imageUrl) {
-  if (!imageUrl) return
-  try {
-    const response = await fetch(getProxyDownloadUrl(imageUrl))
-    const blob = await response.blob()
-    const blobUrl = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = blobUrl
-    anchor.download = 'yesand.png'
-    anchor.click()
-    URL.revokeObjectURL(blobUrl)
-  } catch {
-    // fall back to direct link
-    const anchor = document.createElement('a')
-    anchor.href = getProxyDownloadUrl(imageUrl)
-    anchor.download = 'yesand.png'
-    anchor.target = '_blank'
-    anchor.rel = 'noopener'
-    anchor.click()
-  }
 }
 
 function App() {
@@ -117,30 +93,6 @@ function App() {
       })
   }, [state.isStreaming, state.phase, state.persona, state.messages, userId, sessionId, conversationId])
 
-  const handleDownloadPrompt = useCallback(
-    (text) => {
-      const trimmed = text.trim()
-      if (!trimmed) return
-      dispatch({
-        type: 'ADD_SYSTEM_MESSAGE',
-        content: `> ${trimmed}`,
-        variant: 'normal',
-      })
-      if (!isMobile) {
-        const answer = trimmed.toLowerCase()
-        if (answer === 'y') {
-          triggerDownload(state.imageUrl)
-          dispatch({
-            type: 'ADD_SYSTEM_MESSAGE',
-            content: 'downloading image to ~/Downloads...',
-          })
-        }
-      }
-      dispatch({ type: 'DOWNLOAD_ANSWERED' })
-    },
-    [state.imageUrl],
-  )
-
   const handleReplayPrompt = useCallback(
     (text) => {
       const trimmed = text.trim()
@@ -166,7 +118,6 @@ function App() {
         onSelectPersona={handleSelectPersona}
         onInput={handleInput}
         onGenerate={handleGenerate}
-        onDownloadPrompt={handleDownloadPrompt}
         onReplayPrompt={handleReplayPrompt}
         onLoadingComplete={() => dispatch({ type: 'LOADING_COMPLETE' })}
         onRevealComplete={() => dispatch({ type: 'REVEAL_COMPLETE' })}
