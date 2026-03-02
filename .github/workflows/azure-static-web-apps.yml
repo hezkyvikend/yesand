@@ -33,8 +33,6 @@ jobs:
           app_location: frontend
           api_location: ""
           output_location: dist
-        env:
-          VITE_API_BASE: ${{ secrets.VITE_API_BASE }}
 
   close_pull_request:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
