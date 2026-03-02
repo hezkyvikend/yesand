@@ -10,7 +10,7 @@ load_dotenv()
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -87,6 +87,8 @@ class SuggestResponse(BaseModel):
 
 # --- Routes ---
 
+router = APIRouter()
+
 
 def build_trace_context(
     request: Request,
@@ -116,7 +118,7 @@ def build_trace_context(
     return metadata, tags, request_id
 
 
-@app.get("/personas", response_model=PersonasResponse)
+@router.get("/personas", response_model=PersonasResponse)
 async def list_personas():
     """Return metadata for all available personas."""
     all_personas = load_personas()
@@ -135,7 +137,7 @@ async def list_personas():
     return PersonasResponse(personas=meta)
 
 
-@app.post("/chat", response_model=ChatResponse)
+@router.post("/chat", response_model=ChatResponse)
 async def chat(payload: ChatRequest, request: Request, response: Response):
     """Run a single yes-and conversation turn."""
     persona = get_persona(payload.persona_id)
@@ -154,7 +156,7 @@ async def chat(payload: ChatRequest, request: Request, response: Response):
     return ChatResponse(message=reply)
 
 
-@app.post("/chat/stream")
+@router.post("/chat/stream")
 async def chat_stream(payload: ChatRequest, request: Request):
     """Stream a yes-and conversation turn as server-sent events."""
     persona = get_persona(payload.persona_id)
@@ -181,7 +183,7 @@ async def chat_stream(payload: ChatRequest, request: Request):
     )
 
 
-@app.post("/generate", response_model=GenerateResponse)
+@router.post("/generate", response_model=GenerateResponse)
 async def generate(payload: GenerateRequest, request: Request, response: Response):
     """Synthesize an image prompt from conversation and generate the image."""
     persona = get_persona(payload.persona_id)
@@ -211,13 +213,13 @@ async def generate(payload: GenerateRequest, request: Request, response: Respons
     return GenerateResponse(image_url=image_url, prompt_used=prompt)
 
 
-@app.get("/suggest", response_model=SuggestResponse)
+@router.get("/suggest", response_model=SuggestResponse)
 async def suggest():
     """Return a single random audience suggestion word."""
     return SuggestResponse(word=get_suggestion())
 
 
-@app.get("/proxy-image")
+@router.get("/proxy-image")
 async def proxy_image(url: str):
     """Proxy an image URL and return it with download headers."""
     parsed = urlparse(url)
@@ -235,6 +237,10 @@ async def proxy_image(url: str):
         media_type=content_type,
         headers={"Content-Disposition": 'attachment; filename="yesand.png"'},
     )
+
+
+app.include_router(router)
+app.include_router(router, prefix="/api")
 
 
 if __name__ == "__main__":
