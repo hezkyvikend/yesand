@@ -44,6 +44,7 @@ npm run dev
 - `OPENAI_IMAGE_QUALITY` defaults to `standard` for DALL-E 3.
 - `OPENAI_IMAGE_COST_USD` sets a per-image cost for LangSmith tracking.
 - `OPENAI_TEXT_MODEL` overrides the default text model used for chat and prompt synthesis.
+- `CORS_ORIGINS` sets allowed origins as a comma-separated list (for example: `https://your-app.azurestaticapps.net,http://localhost:5173`).
 - `VITE_API_BASE` can be set in `frontend/.env` to point the UI at a different backend (defaults to `http://localhost:8000`).
 - `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`, and `LANGSMITH_ENDPOINT` enable LangSmith monitoring for backend LLM calls.
 

@@ -51,3 +51,11 @@ def get_image_cost_usd() -> float | None:
         return float(raw)
     except (TypeError, ValueError):
         return None
+
+
+def get_cors_origins() -> list[str]:
+    raw = get_env("CORS_ORIGINS")
+    if not raw:
+        return []
+    origins = [origin.strip() for origin in raw.split(",")]
+    return [origin for origin in origins if origin]

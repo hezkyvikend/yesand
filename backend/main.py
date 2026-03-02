@@ -16,6 +16,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from yesand.agent import run_agent_turn, stream_agent_turn
+from yesand.config import get_cors_origins
 from yesand.image import generate_image
 from yesand.persona import get_persona, load_personas
 from yesand.synthesizer import synthesize_image_prompt
@@ -27,10 +28,11 @@ app = FastAPI(
     version="0.1.0",
 )
 
+cors_origins = get_cors_origins()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=cors_origins or ["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

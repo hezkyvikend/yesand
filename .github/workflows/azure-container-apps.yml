@@ -52,4 +52,5 @@ jobs:
               OPENAI_TEXT_MODEL=secretref:openai-text-model \
               LANGSMITH_TRACING=secretref:langsmith-tracing \
               LANGSMITH_API_KEY=secretref:langsmith-api-key \
-              LANGSMITH_PROJECT=secretref:langsmith-project
+              LANGSMITH_PROJECT=secretref:langsmith-project \
+              CORS_ORIGINS=secretref:cors-origins
