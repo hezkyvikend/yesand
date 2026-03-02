@@ -1,210 +1,439 @@
-# Yes, And — Collaborative Image Creation Chatbot
+# Yes-And Agent Engineering Reference
 
-A FastAPI backend for a collaborative image creation chatbot where users co-create visual scenes through iterative "yes, and" improv with persona-driven AI agents. When satisfied with the scene, users trigger image generation (DALL-E 3) from the accumulated conversation.
+This document is for coding agents working in this repository. It is intentionally implementation-heavy and reflects the current codebase.
 
-## Architecture
+## 1. Product Thesis and System Model
 
-**Stateless backend** — the frontend owns conversation history and sends it in full on every request. No database, no sessions.
+Yes-And treats AI as a collaborator, not a command executor. The UX is designed around improv constraints:
+- Human and model co-build one visual scene.
+- Model answers must begin with "yes, and".
+- Each turn should add one concrete visual detail.
+- A final image prompt is synthesized from the entire transcript.
 
-### Core Flow
+Technical consequence:
+- Frontend owns session/conversation state.
+- Backend is stateless and expects full message history every call.
 
-1. **Chat** (`POST /chat`) — User sends a message + full conversation history + chosen persona. The agent responds with a single "yes, and" turn, adding one visual detail to the scene.
-2. **Generate** (`POST /generate`) — User sends the full conversation history. The synthesizer flattens it into a DALL-E prompt, then the image generator produces the image.
-3. **Personas** (`GET /personas`) — Returns metadata for all available artistic personas.
-
-### Module Responsibilities
-
-| Module | Purpose |
-|---|---|
-| `main.py` | FastAPI app, routes, CORS, request/response models |
-| `yesand/persona.py` | Pydantic models + YAML loader with `lru_cache` |
-| `yesand/agent.py` | LangChain `ChatOpenAI` — runs one "yes, and" improv turn |
-| `yesand/synthesizer.py` | Flattens conversation into a transcript, produces a DALL-E prompt |
-| `yesand/image.py` | `AsyncOpenAI` wrapper for DALL-E 3 image generation |
-
-## Project Structure
+## 2. Monorepo Layout
 
 ```
-backend/
-├── personas/                  # Persona YAML definitions
-│   ├── romantic.yaml
-│   ├── brutalist.yaml
-│   ├── magical_realist.yaml
-│   ├── documentarian.yaml
-│   └── maximalist.yaml
-├── yesand/                    # Core library
-│   ├── __init__.py
-│   ├── persona.py
-│   ├── agent.py
-│   ├── synthesizer.py
-│   └── image.py
-├── tests/
-│   ├── __init__.py
-│   ├── conftest.py            # Shared fixtures
-│   ├── personas/
-│   │   └── test_persona.yaml  # Test fixture YAML
-│   ├── test_persona.py
-│   ├── test_agent.py
-│   ├── test_synthesizer.py
-│   ├── test_image.py
-│   └── test_main.py           # FastAPI integration tests
-├── main.py
-├── pyproject.toml
-├── .env.example
-└── .gitignore
+yesand/
+├── backend/
+│   ├── main.py                     # FastAPI app, routes, error model
+│   ├── personas/*.yaml             # Persona definitions + prompt templates
+│   ├── yesand/
+│   │   ├── agent.py                # Chat turn generation + streaming
+│   │   ├── synthesizer.py          # Transcript -> image prompt
+│   │   ├── image.py                # OpenAI image generation wrapper
+│   │   ├── persona.py              # Persona schema + loader cache
+│   │   ├── prompt_templates.py     # {{suggestion_word}} rendering
+│   │   ├── config.py               # Runtime env readers
+│   │   └── words.py                # Audience suggestion pool
+│   └── tests/                      # Unit/integration tests
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx                 # Top-level orchestration
+│   │   ├── api.js                  # Fetch layer + structured ApiError
+│   │   ├── state/sessionReducer.js # UI state machine
+│   │   └── components/             # Terminal UI + animation
+│   └── staticwebapp.config.json    # SPA fallback rewrite
+└── .github/workflows/
+    ├── azure-static-web-apps.yml   # Frontend deploy pipeline
+    └── azure-container-apps.yml    # Backend deploy pipeline
 ```
 
-## Setup
+## 3. Runtime Architecture
 
-Requires Python >= 3.11 and [uv](https://docs.astral.sh/uv/).
+### 3.1 End-to-End Flow
 
+1. Frontend loads personas: `GET /personas`.
+2. Frontend gets audience prompt: `GET /suggest`.
+3. User chats with persona via `POST /chat/stream` (primary path in UI).
+4. Frontend sends full transcript + suggestion word to `POST /generate`.
+5. Backend synthesizes single image prompt, calls OpenAI Images API, returns URL.
+6. Frontend reveals image and can download via `GET /proxy-image`.
+
+### 3.2 Stateless Contract
+
+Backend stores no conversation state. Requests must include:
+- `persona_id`
+- full `messages` array (`human` and `ai` roles)
+- `suggestion_word` (optional field, but intended to be present in normal flow)
+
+### 3.3 Route Prefixes
+
+Router is mounted twice:
+- root: `/chat`, `/generate`, etc.
+- prefixed: `/api/chat`, `/api/generate`, etc.
+
+Frontend defaults to `/api` unless `VITE_API_BASE` overrides it.
+
+## 4. Backend Deep Dive
+
+### 4.1 API Endpoints
+
+- `GET /personas`
+  - Returns metadata (`id`, `name`, `tagline`, `aesthetic`).
+- `POST /chat`
+  - Non-streaming chat turn.
+- `POST /chat/stream`
+  - SSE streaming chat turn.
+- `POST /generate`
+  - Transcript synthesis + image generation.
+- `GET /suggest`
+  - Returns random uppercase suggestion word.
+- `GET /proxy-image?url=<blob-url>`
+  - Validates Azure blob host suffix and proxies image bytes for download.
+
+### 4.2 Request/Response Models
+
+`ChatRequest` and `GenerateRequest`:
+- `persona_id: str`
+- `messages: list[{role, content}]`
+- `suggestion_word: str | None`
+
+`GenerateResponse`:
+- `image_url: str`
+- `prompt_used: str`
+
+### 4.3 Structured Error Contract
+
+Error responses use FastAPI `HTTPException` with:
+- HTTP status (400/404/502)
+- `detail` object:
+  - `message`
+  - `code`
+  - `request_id`
+  - `stage`
+  - `retryable`
+  - optional `upstream_error`
+- `X-Request-Id` header (for non-SSE failures)
+
+Common `code` values:
+- `unknown_persona`
+- `chat_model_error`
+- `chat_stream_error` (inside SSE event payload)
+- `synthesizer_error`
+- `image_generation_error`
+- `image_url_missing`
+- `invalid_image_url`
+- `image_proxy_fetch_failed`
+
+### 4.4 Tracing and Metadata
+
+`build_trace_context()` extracts request headers:
+- `X-User-Id`
+- `X-Session-Id`
+- `X-Conversation-Id`
+- optional incoming `X-Request-Id` or generated UUID
+
+Metadata/tags are propagated to LangChain/OpenAI calls, and suggestion word is added into metadata when present.
+
+### 4.5 Prompt Templating and Suggestion Injection
+
+`yesand/prompt_templates.py`:
+- placeholder token: `{{suggestion_word}}`
+- `render_system_prompt(template, suggestion_word)` behavior:
+  - if no suggestion: returns template unchanged
+  - if placeholder exists: replaces placeholder
+  - else: appends fallback line `AUDIENCE_SUGGESTION_WORD: <word>`
+
+Both chat and synthesizer system prompts are rendered this way before model invocation.
+
+### 4.6 LLM and Image Invocation Details
+
+`yesand/agent.py`:
+- `run_agent_turn()`:
+  - model default: `gpt-4o` (overridable via `OPENAI_TEXT_MODEL`)
+  - temperature `0.9`
+  - `ensure_yes_and()` enforces prefix
+- `stream_agent_turn()`:
+  - model default: `gpt-5-mini` (same env override key)
+  - temperature `0.9`, streaming enabled
+  - buffers first chunks to enforce "yes, and" at stream start
+
+`yesand/synthesizer.py`:
+- model default: `gpt-4o` (same env override key)
+- temperature `0.3`
+- transcript format:
+  - `human: ...`
+  - `ai: ...`
+
+`yesand/image.py`:
+- uses `AsyncOpenAI` wrapped with LangSmith wrapper
+- request:
+  - model from `OPENAI_IMAGE_MODEL` (default `dall-e-2`)
+  - `size` from `OPENAI_IMAGE_SIZE` (default `1024x1024`)
+  - `n=1`
+  - `quality` only when model is `dall-e-3`
+- returns `response.data[0].url`
+- if route sees falsy URL, backend returns explicit `502 image_url_missing`
+
+### 4.7 Personas
+
+Persona YAMLs live in `backend/personas/`.
+
+Schema:
+- identity fields: `id`, `name`, `tagline`
+- style fields: `voice`, `aesthetic`
+- prompts:
+  - `agent_system_prompt`
+  - `synthesizer_system_prompt`
+
+Current personas:
+- `romantic`
+- `brutalist`
+- `magical_realist`
+- `documentarian`
+- `maximalist`
+
+`load_personas()` is cached (`@lru_cache(maxsize=1)`), so call `load_personas.cache_clear()` in tests when needed.
+
+## 5. Frontend Deep Dive
+
+### 5.1 API Layer
+
+`frontend/src/api.js`:
+- base URL:
+  - `import.meta.env.VITE_API_BASE ?? '/api'`
+- sends identity headers when available:
+  - `X-User-Id`, `X-Session-Id`, `X-Conversation-Id`
+- wraps failures in `ApiError` with normalized fields:
+  - status/code/stage/retryable/requestId/upstreamError/endpoint/method
+- `formatErrorForDisplay()` formats multi-line terminal-friendly errors
+
+SSE protocol handling:
+- expects blocks separated by `\n\n`
+- parses `data:` lines only
+- payload types:
+  - `chunk`
+  - `done`
+  - `error`
+
+### 5.2 Session State Machine
+
+`frontend/src/state/sessionReducer.js` phases:
+- `IDLE`
+- `LOADING`
+- `READY`
+- `CHATTING`
+- `GENERATING`
+- `REVEALING`
+- `FINISHED`
+
+Important guards:
+- `IMAGE_READY` only accepted in `GENERATING`
+- `GENERATE_FAILED` only accepted in `GENERATING`
+
+This prevents stale async completions from overriding current state.
+
+### 5.3 Generate Race Protection
+
+`App.jsx` uses `generateInFlightRef` lock:
+- blocks concurrent generate requests
+- avoids double-click race where one failing request could previously roll back a successful reveal
+
+### 5.4 Identity and Trace Headers
+
+`frontend/src/state/identity.js`:
+- user ID persisted in `localStorage`
+- session ID in `sessionStorage`
+- conversation ID in `localStorage`
+- new persona selection starts a new conversation ID
+
+### 5.5 Loading Sequence
+
+`LoadingSequence` drives startup animation script and typing speeds:
+- scene partner load lines
+- persona style lines
+- audience suggestion wait + reveal
+
+Recent tuning made sequence faster than original but slower than "ultra-fast" variant.
+
+### 5.6 Current UI Request Usage
+
+App currently uses:
+- `streamChat(...)` for chat
+- `generateImage(...)` for image generation
+
+`sendMessage(...)` exists in API module but is not used by `App.jsx` at the moment.
+
+## 6. Environment Configuration
+
+### 6.1 Backend (`backend/.env`)
+
+Required:
+- `OPENAI_API_KEY`
+
+Common optional:
+- `OPENAI_TEXT_MODEL`
+- `OPENAI_IMAGE_MODEL`
+- `OPENAI_IMAGE_SIZE`
+- `OPENAI_IMAGE_QUALITY`
+- `OPENAI_IMAGE_COST_USD`
+- `CORS_ORIGINS`
+- `LANGSMITH_TRACING`
+- `LANGSMITH_API_KEY`
+- `LANGSMITH_PROJECT`
+- `LANGSMITH_ENDPOINT`
+- `LANGSMITH_WORKSPACE_ID`
+
+Notes:
+- `config.py` re-reads `.env` dynamically on each access.
+- default CORS behavior is permissive (`*`) when `CORS_ORIGINS` is unset.
+
+### 6.2 Frontend (`frontend/.env`)
+
+- `VITE_API_BASE=http://localhost:8000` for local split-origin dev.
+- If gateway/same-origin routing is present, use `VITE_API_BASE=/api`.
+- If unset, frontend defaults to `/api`.
+
+## 7. Local Development Commands
+
+Backend:
 ```bash
 cd backend
-
-# Install dependencies (including dev)
 uv sync --all-extras
-
-# Configure environment
-cp .env.example .env
-# Edit .env and set your OPENAI_API_KEY
-```
-
-## Running
-
-```bash
-cd backend
 uv run uvicorn main:app --reload --port 8000
 ```
 
-API docs at [http://localhost:8000/docs](http://localhost:8000/docs).
+Frontend:
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-## Testing
+## 8. Testing and Verification
 
-All tests use mocked LLM/image API calls — no OpenAI key needed.
+### 8.1 Backend Tests
 
 ```bash
 cd backend
-
-uv run pytest          # All tests
-uv run pytest -v       # Verbose (shows each test name)
-uv run pytest -x       # Stop on first failure
-uv run pytest -s       # Show print output
-
-# Single file or test
-uv run pytest tests/test_agent.py
-uv run pytest tests/test_agent.py::TestRunAgentTurn::test_returns_string
+uv run pytest -q
 ```
 
-## API Reference
+Current suite covers:
+- persona loading
+- agent and synthesizer contracts
+- image wrapper behavior
+- main route integration (including structured error paths and suggestion forwarding)
 
-### `GET /personas`
+### 8.2 Frontend Checks
 
-Returns metadata for all available personas.
-
-```json
-{
-  "personas": [
-    { "id": "magical_realist", "name": "The Magical Realist", "tagline": "Finding the extraordinary hidden in the everyday" },
-    { "id": "romantic", "name": "The Romantic", "tagline": "Golden hour light and emotional resonance" }
-  ]
-}
+Build:
+```bash
+cd frontend
+npm run build
 ```
 
-### `POST /chat`
-
-Run a single "yes, and" conversation turn.
-
-**Request:**
-```json
-{
-  "persona_id": "magical_realist",
-  "suggestion_word": "LIGHTHOUSE",
-  "messages": [
-    { "role": "human", "content": "A quiet kitchen in the morning." },
-    { "role": "ai", "content": "Yes, and sunlight streams through the window..." }
-  ]
-}
+Lint:
+```bash
+cd frontend
+npm run lint
 ```
 
-**Response:**
-```json
-{
-  "message": "Yes, and a cat sleeps on newspapers, its orange fur glowing..."
-}
-```
+Current repo status:
+- build passes
+- lint has existing React hook plugin errors in multiple files (pre-existing; not all are tied to current feature work)
 
-### `POST /generate`
+### 8.3 Testing Conventions
 
-Synthesize a DALL-E prompt from the conversation and generate an image.
+- Patch where symbols are imported/used, not where originally defined.
+  - Example: patch `"main.run_agent_turn"` in route tests.
+- Use `AsyncMock` for async functions.
+- Clear persona cache in tests touching persona loader behavior:
+  - `load_personas.cache_clear()`
 
-**Request:** Same shape as `/chat`.
+## 9. Deployment and CI/CD
 
-**Response:**
-```json
-{
-  "image_url": "https://oaidalleapiprodscus.blob.core.windows.net/...",
-  "prompt_used": "A sun-drenched kitchen with an orange cat sleeping on newspapers..."
-}
-```
+Two production workflows exist:
 
-### Error Codes
+### 9.1 Frontend: Azure Static Web Apps
 
-| Code | Meaning |
-|---|---|
-| 404 | Unknown `persona_id` |
-| 422 | Invalid request body |
-| 502 | LLM or image API failure |
+File:
+- `.github/workflows/azure-static-web-apps.yml`
 
-## Personas
+Triggers:
+- push to `main` with `frontend/**` changes
+- pull requests targeting `main` with `frontend/**` changes
+- manual dispatch
 
-Each persona is defined in a YAML file under `backend/personas/` with this schema:
+Secret dependency:
+- `AZURE_STATIC_WEB_APPS_API_TOKEN`
 
-```yaml
-id: magical_realist          # Matches filename (without .yaml)
-name: "The Magical Realist"
-tagline: "Finding the extraordinary hidden in the everyday"
-voice:
-  tone: "Warm, wondering, matter-of-fact about the impossible"
-  rhythm: "Flowing sentences that drift between the mundane and the miraculous"
-aesthetic:
-  pulls_toward: ["Lush, saturated color", "Dreamlike lighting"]
-  pulls_away_from: ["Sterile digital perfection", "Cool minimalism"]
-agent_system_prompt: |
-  <multiline — yes-and improv instructions in this persona's voice>
-synthesizer_system_prompt: |
-  <multiline — instructions to produce a DALL-E prompt in this style>
-```
+### 9.2 Backend: Azure Container Apps
 
-**Available personas:** romantic, brutalist, magical_realist, documentarian, maximalist.
+File:
+- `.github/workflows/azure-container-apps.yml`
 
-## Key Design Decisions
+Triggers:
+- push to `main` with `backend/**` changes
+- manual dispatch
 
-- **Roles:** `human` / `ai` (matches LangChain naming conventions)
-- **Stateless:** Frontend sends full conversation history on every request. No server-side state.
-- **CORS:** `allow_origins=["*"]` for development. Tighten for production.
-- **dotenv:** `load_dotenv()` at the top of `main.py`, before other imports, so `OPENAI_API_KEY` is available when modules initialize.
-- **Error handling:** 404 for unknown persona, 502 for LLM/image API failures.
-- **LLM config:** Agent uses `temperature=0.9` (creative improv), synthesizer uses `temperature=0.3` (focused extraction). Both use `gpt-4o`.
-- **Image generation:** DALL-E 3, 1024x1024, standard quality.
-- **Caching:** `load_personas()` uses `@lru_cache(maxsize=1)`. Call `.cache_clear()` if persona files change at runtime.
+Pipeline summary:
+- Azure login via `AZURE_CREDENTIALS`
+- ACR build (`az acr build`)
+- Container App update to image `${GITHUB_SHA}`
+- env vars set via Azure secret refs
 
-## Testing Patterns
+## 10. Common Agent Playbooks
 
-Key conventions used across tests:
+### 10.1 Add/Change an API Endpoint
 
-- **Patch where it's looked up, not where it's defined.** If `main.py` does `from yesand.agent import run_agent_turn`, patch `"main.run_agent_turn"`.
-- **`AsyncMock` for async functions.** Use `new_callable=AsyncMock` in `patch()`.
-- **`lru_cache` isolation.** Call `load_personas.cache_clear()` at the start of tests that load personas to prevent cross-test contamination.
-- **`asyncio_mode = "auto"`** in `pyproject.toml` — no `@pytest.mark.asyncio` decorators needed.
-- **`pythonpath = ["."]`** — allows `from yesand.persona import ...` without an editable install.
+1. Update request/response models in `backend/main.py`.
+2. Implement route + structured errors (`_build_error_detail`, `_error_response`).
+3. Add tests in `backend/tests/test_main.py`.
+4. Update frontend `api.js` if endpoint is client-facing.
+5. Wire app state updates in `App.jsx`/`sessionReducer.js` if needed.
 
-## Development Notes for AI Agents
+### 10.2 Add a New Persona
 
-When working on this codebase:
+1. Add YAML under `backend/personas/<id>.yaml`.
+2. Include both prompt fields and keep `{{suggestion_word}}` in templates.
+3. Ensure style metadata is present (`aesthetic` lists).
+4. (Optional) add tests for persona-specific behavior.
 
-- All commands should be run from `backend/` since `pyproject.toml`, `main.py`, and all paths are relative to that directory.
-- The `yesand/__init__.py` is empty — no re-exports.
-- `PERSONAS_DIR` in `persona.py` resolves to `backend/personas/` via `Path(__file__).resolve().parent.parent / "personas"`.
-- To add a new persona: create a YAML file in `personas/`, matching the schema above. The loader picks up all `*.yaml` files in that directory automatically.
-- To add a new endpoint: add request/response models and a route function in `main.py`, with corresponding module(s) in `yesand/` if needed.
-- DALL-E image URLs are temporary (expire after ~1 hour). The frontend should download/cache them if persistence is needed.
+### 10.3 Debug "Image Generated in LangSmith but UI Failed"
+
+Check in order:
+1. Frontend race/stale actions (`generateInFlightRef`, reducer phase guards).
+2. Backend `/generate` error code and `request_id`.
+3. `image_url_missing` or upstream `image_generation_error`.
+4. Correlate `request_id` with LangSmith traces.
+
+### 10.4 Debug Frontend API Errors
+
+1. Inspect terminal-rendered error block (status, code, stage, request id).
+2. Re-run request with curl including same payload.
+3. Confirm `VITE_API_BASE` target and CORS origin.
+
+## 11. Known Gotchas
+
+- Backend routes exist under both `/` and `/api`; avoid duplicating assumptions.
+- DALL-E blob URLs are temporary; `proxy-image` is for download path.
+- `OPENAI_TEXT_MODEL` env overrides both chat and synthesizer model defaults.
+- `chat/stream` has explicit SSE error event payload shape; keep client parser aligned.
+- `.claude/settings.local.json` may be tracked locally in some clones; do not assume it is safe to modify/commit.
+
+## 12. File Index for Fast Navigation
+
+Backend core:
+- `backend/main.py`
+- `backend/yesand/agent.py`
+- `backend/yesand/synthesizer.py`
+- `backend/yesand/image.py`
+- `backend/yesand/prompt_templates.py`
+- `backend/yesand/persona.py`
+
+Frontend core:
+- `frontend/src/App.jsx`
+- `frontend/src/api.js`
+- `frontend/src/state/sessionReducer.js`
+- `frontend/src/components/Terminal/Terminal.jsx`
+- `frontend/src/components/LoadingSequence/LoadingSequence.jsx`
+
+Infra:
+- `.github/workflows/azure-static-web-apps.yml`
+- `.github/workflows/azure-container-apps.yml`
+- `backend/Dockerfile`
