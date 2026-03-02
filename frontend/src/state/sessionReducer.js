@@ -85,6 +85,7 @@ export function sessionReducer(state, action) {
       return { ...state, phase: 'GENERATING' }
 
     case 'IMAGE_READY':
+      if (state.phase !== 'GENERATING') return state
       return {
         ...state,
         phase: 'REVEALING',
@@ -97,6 +98,7 @@ export function sessionReducer(state, action) {
       return { ...state, phase: 'FINISHED' }
 
     case 'GENERATE_FAILED':
+      if (state.phase !== 'GENERATING') return state
       return { ...state, phase: 'CHATTING', isStreaming: false }
 
     case 'RESET':

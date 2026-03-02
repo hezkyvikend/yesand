@@ -8,27 +8,27 @@ export function buildLoadingScript(persona, suggestionWord) {
   const pullsAway = persona?.aesthetic?.pulls_away_from?.join(', ') || ''
 
   const base = [
-    { text: 'loading scene partner...', speed: 25, step },
-    { text: '████████████████', speed: 500, step, noBreak: true},
-    { text: ' complete ✓', speed: 12, step: 2 , inline: true},
+    { text: 'loading scene partner...', speed: 20, step },
+    { text: '████████████████', speed: 180, step: 5, noBreak: true},
+    { text: ' complete ✓', speed: 10, step: 2 , inline: true},
     { text: '', speed: 0, step },
-    { text: `PERSONA: ${persona?.name ?? ''}`, speed: 22, step },
-    { text: `"${persona?.tagline ?? ''}"`, speed: 22, step },
+    { text: `PERSONA: ${persona?.name ?? ''}`, speed: 18, step },
+    { text: `"${persona?.tagline ?? ''}"`, speed: 18, step },
     { text: '', speed: 0, step },
-    { text: `pulls toward: ${pullsToward}`, speed: 18, step },
-    { text: `pulls away from: ${pullsAway}`, speed: 18, step },
+    { text: `pulls toward: ${pullsToward}`, speed: 15, step },
+    { text: `pulls away from: ${pullsAway}`, speed: 15, step },
     { text: '', speed: 0, step },
-    { text: 'waiting for suggestion from the audience', speed: 22, step, noBreak: true },
-    { text: '...', speed: 1000, step: 1, inline: true },
+    { text: 'waiting for suggestion from the audience', speed: 18, step, noBreak: true },
+    { text: '...', speed: 400, step: 1, inline: true },
   ]
 
   if (!suggestionWord) return base
 
   return [
     ...base,
-    { text: `▶  ${suggestionWord}`, speed: 45, step: 2 },
+    { text: `▶  ${suggestionWord}`, speed: 28, step: 2 },
     { text: '', speed: 0, step },
-    { text: 'your scene, your rules. begin when ready.', speed: 22, step },
+    { text: 'your scene, your rules. begin when ready.', speed: 18, step },
   ]
 }
 

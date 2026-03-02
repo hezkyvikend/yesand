@@ -50,6 +50,17 @@ class TestPostChat:
         assert response.status_code == 200
         assert response.json()["message"] == "Yes, and the light shifts."
 
+    async def test_chat_forwards_suggestion_word(self, client):
+        with patch("main.run_agent_turn", new_callable=AsyncMock, return_value="Yes, and the light shifts.") as mock_run:
+            response = await client.post("/chat", json={
+                "persona_id": "magical_realist",
+                "suggestion_word": "LIGHTHOUSE",
+                "messages": [{"role": "human", "content": "A quiet room."}],
+            })
+
+        assert response.status_code == 200
+        assert mock_run.call_args.kwargs["suggestion_word"] == "LIGHTHOUSE"
+
     async def test_chat_unknown_persona_404(self, client):
         response = await client.post("/chat", json={
             "persona_id": "nonexistent",
@@ -92,12 +103,32 @@ class TestPostGenerate:
         assert data["image_url"] == "https://example.com/img.png"
         assert data["prompt_used"] == "A dreamy kitchen scene"
 
+    async def test_generate_forwards_suggestion_word(self, client):
+        with (
+            patch("main.synthesize_image_prompt", new_callable=AsyncMock, return_value="A dreamy kitchen scene") as mock_synthesize,
+            patch("main.generate_image", new_callable=AsyncMock, return_value="https://example.com/img.png"),
+        ):
+            response = await client.post("/generate", json={
+                "persona_id": "magical_realist",
+                "suggestion_word": "LIGHTHOUSE",
+                "messages": [{"role": "human", "content": "A kitchen."}],
+            })
+
+        assert response.status_code == 200
+        assert mock_synthesize.call_args.kwargs["suggestion_word"] == "LIGHTHOUSE"
+
     async def test_generate_unknown_persona_404(self, client):
         response = await client.post("/generate", json={
             "persona_id": "nonexistent",
             "messages": [{"role": "human", "content": "Hello."}],
         })
         assert response.status_code == 404
+        detail = response.json()["detail"]
+        assert detail["code"] == "unknown_persona"
+        assert detail["stage"] == "validation"
+        assert detail["retryable"] is False
+        assert "request_id" in detail
+        assert response.headers.get("x-request-id")
 
     async def test_generate_calls_synthesizer_then_image(self, client):
         """Verify the synthesizer is called before image generation."""
@@ -121,6 +152,23 @@ class TestPostGenerate:
             })
 
         assert call_order == ["synthesize", "generate"]
+
+    async def test_generate_missing_image_url_502(self, client):
+        with (
+            patch("main.synthesize_image_prompt", new_callable=AsyncMock, return_value="prompt text"),
+            patch("main.generate_image", new_callable=AsyncMock, return_value=None),
+        ):
+            response = await client.post("/generate", json={
+                "persona_id": "magical_realist",
+                "messages": [{"role": "human", "content": "A scene."}],
+            })
+
+        assert response.status_code == 502
+        detail = response.json()["detail"]
+        assert detail["code"] == "image_url_missing"
+        assert detail["stage"] == "image"
+        assert detail["retryable"] is True
+        assert "request_id" in detail
 
 
 class TestGetSuggest:

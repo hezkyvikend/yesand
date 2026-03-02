@@ -118,6 +118,7 @@ Run a single "yes, and" conversation turn.
 ```json
 {
   "persona_id": "magical_realist",
+  "suggestion_word": "LIGHTHOUSE",
   "messages": [
     { "role": "human", "content": "A quiet kitchen in the morning." },
     { "role": "ai", "content": "Yes, and sunlight streams through the window..." }

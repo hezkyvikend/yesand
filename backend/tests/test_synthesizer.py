@@ -46,3 +46,14 @@ class TestSynthesizeImagePrompt:
         call_args = mock_llm.ainvoke.call_args[0][0]
         assert isinstance(call_args[0], SystemMessage)
         assert call_args[0].content == sample_persona.synthesizer_system_prompt
+
+    async def test_suggestion_word_injected_into_synthesizer_prompt(self, sample_persona, sample_history):
+        mock_llm = MagicMock()
+        mock_llm.ainvoke = AsyncMock(return_value=MagicMock(content="prompt"))
+
+        with patch("yesand.synthesizer.ChatOpenAI", return_value=mock_llm):
+            await synthesize_image_prompt(sample_persona, sample_history, suggestion_word="LIGHTHOUSE")
+
+        call_args = mock_llm.ainvoke.call_args[0][0]
+        assert isinstance(call_args[0], SystemMessage)
+        assert "AUDIENCE_SUGGESTION_WORD: LIGHTHOUSE" in call_args[0].content

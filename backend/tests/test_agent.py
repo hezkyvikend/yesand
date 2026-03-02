@@ -31,6 +31,17 @@ class TestRunAgentTurn:
         assert isinstance(call_args[0], SystemMessage)
         assert call_args[0].content == sample_persona.agent_system_prompt
 
+    async def test_suggestion_word_injected_into_system_prompt(self, sample_persona, sample_history):
+        mock_llm = MagicMock()
+        mock_llm.ainvoke = AsyncMock(return_value=MagicMock(content="response"))
+
+        with patch("yesand.agent.ChatOpenAI", return_value=mock_llm):
+            await run_agent_turn(sample_persona, sample_history, suggestion_word="LIGHTHOUSE")
+
+        call_args = mock_llm.ainvoke.call_args[0][0]
+        assert isinstance(call_args[0], SystemMessage)
+        assert "AUDIENCE_SUGGESTION_WORD: LIGHTHOUSE" in call_args[0].content
+
     async def test_full_history_forwarded(self, sample_persona, sample_history):
         mock_llm = MagicMock()
         mock_llm.ainvoke = AsyncMock(return_value=MagicMock(content="response"))

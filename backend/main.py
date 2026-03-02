@@ -49,6 +49,7 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     persona_id: str
     messages: list[Message]
+    suggestion_word: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -58,6 +59,7 @@ class ChatResponse(BaseModel):
 class GenerateRequest(BaseModel):
     persona_id: str
     messages: list[Message]
+    suggestion_word: str | None = None
 
 
 class GenerateResponse(BaseModel):
@@ -118,6 +120,32 @@ def build_trace_context(
     return metadata, tags, request_id
 
 
+def _build_error_detail(
+    *,
+    message: str,
+    code: str,
+    request_id: str | None = None,
+    stage: str | None = None,
+    retryable: bool | None = None,
+    upstream_error: str | None = None,
+) -> dict:
+    detail = {"message": message, "code": code}
+    if request_id:
+        detail["request_id"] = request_id
+    if stage:
+        detail["stage"] = stage
+    if retryable is not None:
+        detail["retryable"] = retryable
+    if upstream_error:
+        detail["upstream_error"] = str(upstream_error)[:500]
+    return detail
+
+
+def _error_response(status_code: int, detail: dict, request_id: str | None = None) -> HTTPException:
+    headers = {"X-Request-Id": request_id} if request_id else None
+    return HTTPException(status_code=status_code, detail=detail, headers=headers)
+
+
 @router.get("/personas", response_model=PersonasResponse)
 async def list_personas():
     """Return metadata for all available personas."""
@@ -140,18 +168,48 @@ async def list_personas():
 @router.post("/chat", response_model=ChatResponse)
 async def chat(payload: ChatRequest, request: Request, response: Response):
     """Run a single yes-and conversation turn."""
-    persona = get_persona(payload.persona_id)
-    if persona is None:
-        raise HTTPException(status_code=404, detail=f"Unknown persona: {payload.persona_id}")
-
-    history = [msg.model_dump() for msg in payload.messages]
-    metadata, tags, request_id = build_trace_context(request, payload.persona_id, "chat")
+    _, _, request_id = build_trace_context(request, payload.persona_id, "chat")
     response.headers["X-Request-Id"] = request_id
 
+    persona = get_persona(payload.persona_id)
+    if persona is None:
+        detail = _build_error_detail(
+            message=f"Unknown persona: {payload.persona_id}",
+            code="unknown_persona",
+            request_id=request_id,
+            stage="validation",
+            retryable=False,
+        )
+        raise _error_response(404, detail, request_id=request_id)
+
+    history = [msg.model_dump() for msg in payload.messages]
+    metadata, tags, _ = build_trace_context(
+        request,
+        payload.persona_id,
+        "chat",
+        request_id=request_id,
+    )
+    if payload.suggestion_word:
+        metadata["suggestion_word"] = payload.suggestion_word
+
     try:
-        reply = await run_agent_turn(persona, history, metadata=metadata, tags=tags)
+        reply = await run_agent_turn(
+            persona,
+            history,
+            suggestion_word=payload.suggestion_word,
+            metadata=metadata,
+            tags=tags,
+        )
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"LLM error: {e}")
+        detail = _build_error_detail(
+            message="Chat model request failed",
+            code="chat_model_error",
+            request_id=request_id,
+            stage="chat",
+            retryable=True,
+            upstream_error=str(e),
+        )
+        raise _error_response(502, detail, request_id=request_id)
 
     return ChatResponse(message=reply)
 
@@ -159,22 +217,52 @@ async def chat(payload: ChatRequest, request: Request, response: Response):
 @router.post("/chat/stream")
 async def chat_stream(payload: ChatRequest, request: Request):
     """Stream a yes-and conversation turn as server-sent events."""
+    _, _, request_id = build_trace_context(request, payload.persona_id, "chat_stream")
+
     persona = get_persona(payload.persona_id)
     if persona is None:
-        raise HTTPException(status_code=404, detail=f"Unknown persona: {payload.persona_id}")
+        detail = _build_error_detail(
+            message=f"Unknown persona: {payload.persona_id}",
+            code="unknown_persona",
+            request_id=request_id,
+            stage="validation",
+            retryable=False,
+        )
+        raise _error_response(404, detail, request_id=request_id)
 
     history = [msg.model_dump() for msg in payload.messages]
-    metadata, tags, request_id = build_trace_context(request, payload.persona_id, "chat_stream")
+    metadata, tags, _ = build_trace_context(
+        request,
+        payload.persona_id,
+        "chat_stream",
+        request_id=request_id,
+    )
+    if payload.suggestion_word:
+        metadata["suggestion_word"] = payload.suggestion_word
 
     async def event_generator():
         try:
-            async for chunk in stream_agent_turn(persona, history, metadata=metadata, tags=tags):
-                payload = {"type": "chunk", "content": chunk}
-                yield f"data: {json.dumps(payload)}\n\n"
+            async for chunk in stream_agent_turn(
+                persona,
+                history,
+                suggestion_word=payload.suggestion_word,
+                metadata=metadata,
+                tags=tags,
+            ):
+                event_payload = {"type": "chunk", "content": chunk}
+                yield f"data: {json.dumps(event_payload)}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
         except Exception as e:
-            payload = {"type": "error", "message": str(e)}
-            yield f"data: {json.dumps(payload)}\n\n"
+            event_payload = {
+                "type": "error",
+                "message": "Chat stream failed",
+                "code": "chat_stream_error",
+                "stage": "chat_stream",
+                "request_id": request_id,
+                "retryable": True,
+                "upstream_error": str(e)[:500],
+            }
+            yield f"data: {json.dumps(event_payload)}\n\n"
 
     return StreamingResponse(
         event_generator(),
@@ -186,18 +274,48 @@ async def chat_stream(payload: ChatRequest, request: Request):
 @router.post("/generate", response_model=GenerateResponse)
 async def generate(payload: GenerateRequest, request: Request, response: Response):
     """Synthesize an image prompt from conversation and generate the image."""
-    persona = get_persona(payload.persona_id)
-    if persona is None:
-        raise HTTPException(status_code=404, detail=f"Unknown persona: {payload.persona_id}")
-
-    history = [msg.model_dump() for msg in payload.messages]
-    metadata, tags, request_id = build_trace_context(request, payload.persona_id, "synthesize")
+    _, _, request_id = build_trace_context(request, payload.persona_id, "generate")
     response.headers["X-Request-Id"] = request_id
 
+    persona = get_persona(payload.persona_id)
+    if persona is None:
+        detail = _build_error_detail(
+            message=f"Unknown persona: {payload.persona_id}",
+            code="unknown_persona",
+            request_id=request_id,
+            stage="validation",
+            retryable=False,
+        )
+        raise _error_response(404, detail, request_id=request_id)
+
+    history = [msg.model_dump() for msg in payload.messages]
+    metadata, tags, _ = build_trace_context(
+        request,
+        payload.persona_id,
+        "synthesize",
+        request_id=request_id,
+    )
+    if payload.suggestion_word:
+        metadata["suggestion_word"] = payload.suggestion_word
+
     try:
-        prompt = await synthesize_image_prompt(persona, history, metadata=metadata, tags=tags)
+        prompt = await synthesize_image_prompt(
+            persona,
+            history,
+            suggestion_word=payload.suggestion_word,
+            metadata=metadata,
+            tags=tags,
+        )
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Synthesizer error: {e}")
+        detail = _build_error_detail(
+            message="Failed to synthesize image prompt",
+            code="synthesizer_error",
+            request_id=request_id,
+            stage="synthesize",
+            retryable=True,
+            upstream_error=str(e),
+        )
+        raise _error_response(502, detail, request_id=request_id)
 
     try:
         image_metadata, image_tags, _ = build_trace_context(
@@ -208,7 +326,25 @@ async def generate(payload: GenerateRequest, request: Request, response: Respons
         )
         image_url = await generate_image(prompt, metadata=image_metadata, tags=image_tags)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Image generation error: {e}")
+        detail = _build_error_detail(
+            message="Image generation request failed",
+            code="image_generation_error",
+            request_id=request_id,
+            stage="image",
+            retryable=True,
+            upstream_error=str(e),
+        )
+        raise _error_response(502, detail, request_id=request_id)
+
+    if not image_url:
+        detail = _build_error_detail(
+            message="Image provider returned no URL",
+            code="image_url_missing",
+            request_id=request_id,
+            stage="image",
+            retryable=True,
+        )
+        raise _error_response(502, detail, request_id=request_id)
 
     return GenerateResponse(image_url=image_url, prompt_used=prompt)
 
@@ -220,16 +356,34 @@ async def suggest():
 
 
 @router.get("/proxy-image")
-async def proxy_image(url: str):
+async def proxy_image(url: str, request: Request, response: Response):
     """Proxy an image URL and return it with download headers."""
+    _, _, request_id = build_trace_context(request, None, "proxy_image")
+    response.headers["X-Request-Id"] = request_id
+
     parsed = urlparse(url)
     if not parsed.hostname or not parsed.hostname.endswith(".blob.core.windows.net"):
-        raise HTTPException(status_code=400, detail="Invalid image URL")
+        detail = _build_error_detail(
+            message="Invalid image URL",
+            code="invalid_image_url",
+            request_id=request_id,
+            stage="proxy_image",
+            retryable=False,
+        )
+        raise _error_response(400, detail, request_id=request_id)
 
     async with httpx.AsyncClient() as client:
         resp = await client.get(url, timeout=30.0)
         if resp.status_code != 200:
-            raise HTTPException(status_code=502, detail="Failed to fetch image")
+            detail = _build_error_detail(
+                message="Failed to fetch image",
+                code="image_proxy_fetch_failed",
+                request_id=request_id,
+                stage="proxy_image",
+                retryable=True,
+                upstream_error=f"upstream status {resp.status_code}",
+            )
+            raise _error_response(502, detail, request_id=request_id)
 
     content_type = resp.headers.get("content-type", "image/png")
     return Response(

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useReducer, useState } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import styles from './App.module.css'
-import { fetchPersonas, fetchSuggestion, generateImage, streamChat } from './api'
+import { fetchPersonas, fetchSuggestion, formatErrorForDisplay, generateImage, streamChat } from './api'
 import { initialState, sessionReducer } from './state/sessionReducer'
 import {
   getOrCreateConversationId,
@@ -21,6 +21,7 @@ function App() {
   const [userId] = useState(() => getOrCreateUserId())
   const [sessionId] = useState(() => getOrCreateSessionId())
   const [conversationId, setConversationId] = useState(() => getOrCreateConversationId())
+  const generateInFlightRef = useRef(false)
 
   useEffect(() => {
     let active = true
@@ -29,9 +30,9 @@ function App() {
         if (!active) return
         setPersonas(data.personas)
       })
-      .catch(() => {
+      .catch((error) => {
         if (!active) return
-        setPersonaError('error: failed to load personas')
+        setPersonaError(formatErrorForDisplay(error, 'failed to load personas'))
       })
     return () => {
       active = false
@@ -46,8 +47,11 @@ function App() {
       .then((data) => {
         dispatch({ type: 'SET_SUGGESTION', word: data.word })
       })
-      .catch(() => {
-        dispatch({ type: 'ADD_ERROR_MESSAGE', content: 'error: failed to fetch suggestion' })
+      .catch((error) => {
+        dispatch({
+          type: 'ADD_ERROR_MESSAGE',
+          content: formatErrorForDisplay(error, 'failed to fetch suggestion'),
+        })
         dispatch({ type: 'SET_SUGGESTION', word: '???' })
       })
   }, [userId, sessionId])
@@ -67,31 +71,42 @@ function App() {
         updatedMessages,
         (chunk) => dispatch({ type: 'APPEND_AI_CHUNK', chunk }),
         () => dispatch({ type: 'END_AI_MESSAGE' }),
-        () => {
-          dispatch({ type: 'ADD_ERROR_MESSAGE', content: 'error: chat failed' })
+        (error) => {
+          dispatch({
+            type: 'ADD_ERROR_MESSAGE',
+            content: formatErrorForDisplay(error, 'chat failed'),
+          })
           dispatch({ type: 'END_AI_MESSAGE' })
         },
         { userId, sessionId, conversationId },
+        state.suggestionWord,
       )
     },
-    [state.isStreaming, state.persona, state.messages, userId, sessionId, conversationId],
+    [state.isStreaming, state.persona, state.messages, state.suggestionWord, userId, sessionId, conversationId],
   )
 
   const handleGenerate = useCallback(() => {
-    if (state.phase !== 'CHATTING' || state.isStreaming) return
+    if (state.phase !== 'CHATTING' || state.isStreaming || generateInFlightRef.current) return
     const chatMessages = getChatMessages(state.messages)
     if (!chatMessages.length) return
 
+    generateInFlightRef.current = true
     dispatch({ type: 'GENERATE' })
-    generateImage(state.persona.id, chatMessages, { userId, sessionId, conversationId })
+    generateImage(state.persona.id, chatMessages, { userId, sessionId, conversationId }, state.suggestionWord)
       .then((data) => {
         dispatch({ type: 'IMAGE_READY', imageUrl: data.image_url, promptUsed: data.prompt_used })
       })
-      .catch(() => {
-        dispatch({ type: 'ADD_ERROR_MESSAGE', content: 'error: generation failed' })
+      .catch((error) => {
+        dispatch({
+          type: 'ADD_ERROR_MESSAGE',
+          content: formatErrorForDisplay(error, 'generation failed'),
+        })
         dispatch({ type: 'GENERATE_FAILED' })
       })
-  }, [state.isStreaming, state.phase, state.persona, state.messages, userId, sessionId, conversationId])
+      .finally(() => {
+        generateInFlightRef.current = false
+      })
+  }, [state.isStreaming, state.phase, state.persona, state.messages, state.suggestionWord, userId, sessionId, conversationId])
 
   const handleReplayPrompt = useCallback(
     (text) => {

@@ -7,6 +7,7 @@ from langchain_openai import ChatOpenAI
 
 from yesand.config import get_text_model
 from yesand.persona import Persona
+from yesand.prompt_templates import render_system_prompt
 
 
 def _build_trace_config(metadata: dict | None, tags: list[str] | None) -> dict | None:
@@ -21,6 +22,7 @@ def _build_trace_config(metadata: dict | None, tags: list[str] | None) -> dict |
 async def run_agent_turn(
     persona: Persona,
     history: list[dict],
+    suggestion_word: str | None = None,
     metadata: dict | None = None,
     tags: list[str] | None = None,
 ) -> str:
@@ -33,7 +35,8 @@ async def run_agent_turn(
     Returns:
         The AI's response text.
     """
-    messages = [SystemMessage(content=persona.agent_system_prompt)]
+    system_prompt = render_system_prompt(persona.agent_system_prompt, suggestion_word)
+    messages = [SystemMessage(content=system_prompt)]
 
     for msg in history:
         if msg["role"] == "human":
@@ -59,6 +62,7 @@ def ensure_yes_and(text: str) -> str:
 async def stream_agent_turn(
     persona: Persona,
     history: list[dict],
+    suggestion_word: str | None = None,
     metadata: dict | None = None,
     tags: list[str] | None = None,
 ) -> AsyncGenerator[str, None]:
@@ -66,7 +70,8 @@ async def stream_agent_turn(
 
     Yields text chunks as they arrive from the LLM.
     """
-    messages = [SystemMessage(content=persona.agent_system_prompt)]
+    system_prompt = render_system_prompt(persona.agent_system_prompt, suggestion_word)
+    messages = [SystemMessage(content=system_prompt)]
 
     for msg in history:
         if msg["role"] == "human":

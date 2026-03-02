@@ -5,6 +5,7 @@ from langchain_openai import ChatOpenAI
 
 from yesand.config import get_text_model
 from yesand.persona import Persona
+from yesand.prompt_templates import render_system_prompt
 
 
 def _build_trace_config(metadata: dict | None, tags: list[str] | None) -> dict | None:
@@ -19,6 +20,7 @@ def _build_trace_config(metadata: dict | None, tags: list[str] | None) -> dict |
 async def synthesize_image_prompt(
     persona: Persona,
     history: list[dict],
+    suggestion_word: str | None = None,
     metadata: dict | None = None,
     tags: list[str] | None = None,
 ) -> str:
@@ -37,8 +39,9 @@ async def synthesize_image_prompt(
         transcript_lines.append(f"{label}: {msg['content']}")
     transcript = "\n".join(transcript_lines)
 
+    system_prompt = render_system_prompt(persona.synthesizer_system_prompt, suggestion_word)
     messages = [
-        SystemMessage(content=persona.synthesizer_system_prompt),
+        SystemMessage(content=system_prompt),
         HumanMessage(content=transcript),
     ]
 
