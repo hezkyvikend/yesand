@@ -57,6 +57,7 @@ export function Terminal({
     placeholder: phase === 'FINISHED' ? 'press any key' : 'enter to send...',
     showGenerate: true,
     generateEnabled: isChatPhase && hasMessages && !state.isStreaming,
+    allowGenerateFromDraft: isChatPhase && !state.isStreaming,
     onGenerate,
   }
 

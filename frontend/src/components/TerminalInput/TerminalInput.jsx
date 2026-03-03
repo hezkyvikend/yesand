@@ -7,10 +7,13 @@ export function TerminalInput({
   placeholder = 'enter to send...',
   onGenerate,
   generateEnabled = false,
+  allowGenerateFromDraft = false,
   showGenerate = false,
 }) {
   const [value, setValue] = useState('')
   const inputRef = useRef(null)
+  const hasDraft = value.trim().length > 0
+  const canGenerate = generateEnabled || (allowGenerateFromDraft && hasDraft)
 
   useEffect(() => {
     if (!disabled) {
@@ -48,8 +51,13 @@ export function TerminalInput({
           <button
             type="button"
             className={styles.generateBtn}
-            disabled={!generateEnabled}
-            onClick={onGenerate}
+            disabled={!canGenerate}
+            onClick={() => {
+              onGenerate?.(value)
+              if (hasDraft) {
+                setValue('')
+              }
+            }}
           >
             generate
           </button>

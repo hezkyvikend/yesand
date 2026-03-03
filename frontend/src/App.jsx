@@ -85,9 +85,19 @@ function App() {
     [state.isStreaming, state.persona, state.messages, state.suggestionWord, userId, sessionId, conversationId],
   )
 
-  const handleGenerate = useCallback(() => {
-    if (state.phase !== 'CHATTING' || state.isStreaming || generateInFlightRef.current) return
-    const chatMessages = getChatMessages(state.messages)
+  const handleGenerate = useCallback((draftText = '') => {
+    if (state.isStreaming || generateInFlightRef.current) return
+
+    const trimmedDraft = typeof draftText === 'string' ? draftText.trim() : ''
+    const isChatPhase = state.phase === 'READY' || state.phase === 'CHATTING'
+    if (!isChatPhase) return
+
+    let chatMessages = getChatMessages(state.messages)
+    if (trimmedDraft) {
+      dispatch({ type: 'SEND_MESSAGE', content: draftText })
+      chatMessages = [...chatMessages, { role: 'human', content: draftText }]
+    }
+
     if (!chatMessages.length) return
 
     generateInFlightRef.current = true
