@@ -36,12 +36,14 @@ export function TerminalInput({
       <div className={styles.inputRow}>
         <input
           ref={inputRef}
+          type="text"
           className={styles.input}
           value={value}
           onChange={(event) => setValue(event.target.value)}
           onKeyDown={handleKeyDown}
           disabled={disabled}
           placeholder={placeholder}
+          enterKeyHint="send"
           spellCheck={false}
           autoComplete="off"
           autoCorrect="off"

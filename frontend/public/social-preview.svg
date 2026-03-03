@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bgGlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#040904" />
+      <stop offset="100%" stop-color="#050505" />
+    </linearGradient>
+    <pattern id="scan" width="6" height="6" patternUnits="userSpaceOnUse">
+      <rect width="6" height="3" fill="rgba(57,255,20,0.08)" />
+      <rect y="3" width="6" height="3" fill="rgba(0,0,0,0)" />
+    </pattern>
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bgGlow)" />
+  <rect width="1200" height="630" fill="url(#scan)" opacity="0.55" />
+
+  <rect
+    x="74"
+    y="74"
+    width="1052"
+    height="482"
+    rx="18"
+    fill="none"
+    stroke="#39ff14"
+    stroke-width="3"
+    opacity="0.92"
+  />
+
+  <text
+    x="130"
+    y="315"
+    fill="#39ff14"
+    font-family="'JetBrains Mono','SFMono-Regular',Menlo,Consolas,'Liberation Mono','Courier New',monospace"
+    font-size="104"
+    font-weight="700"
+    letter-spacing="0.2"
+    filter="url(#softGlow)"
+  >yes,and.ai</text>
+
+  <text
+    x="130"
+    y="385"
+    fill="#b5ff9f"
+    font-family="'JetBrains Mono','SFMono-Regular',Menlo,Consolas,'Liberation Mono','Courier New',monospace"
+    font-size="30"
+    font-weight="500"
+    opacity="0.95"
+  >collaborative improv for image generation</text>
+
+  <text
+    x="130"
+    y="448"
+    fill="#8edc7c"
+    font-family="'JetBrains Mono','SFMono-Regular',Menlo,Consolas,'Liberation Mono','Courier New',monospace"
+    font-size="24"
+    font-weight="400"
+    opacity="0.82"
+  >select a scene partner • riff • generate</text>
+</svg>
