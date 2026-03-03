@@ -37,25 +37,63 @@
   color: var(--green-faint);
 }
 
-.generateBtn {
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sendBtn {
   background: transparent;
   border: 1px solid var(--green);
-  border-radius: 20px;
-  padding: 4px 16px;
+  border-radius: 999px;
+  padding: 4px 14px;
   color: var(--green);
   font-family: var(--font);
   font-size: 13px;
+  line-height: 1.2;
   cursor: pointer;
   white-space: nowrap;
 }
 
-.generateBtn:disabled {
+.sendBtn:disabled {
   border-color: var(--green-faint);
   color: var(--green-faint);
   cursor: default;
 }
 
-.generateBtn:hover:not(:disabled) {
+.sendBtn:hover:not(:disabled) {
+  background: var(--green);
+  color: var(--bg);
+}
+
+.generateIconBtn {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--green);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--green);
+  cursor: pointer;
+  padding: 0;
+}
+
+.generateIcon {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+.generateIconBtn:disabled {
+  border-color: var(--green-faint);
+  color: var(--green-faint);
+  cursor: default;
+}
+
+.generateIconBtn:hover:not(:disabled) {
   background: var(--green);
   color: var(--bg);
 }
@@ -68,5 +106,14 @@
 
   .input {
     font-size: 16px;
+  }
+
+  .sendBtn {
+    padding: 6px 14px;
+  }
+
+  .generateIconBtn {
+    width: 32px;
+    height: 32px;
   }
 }

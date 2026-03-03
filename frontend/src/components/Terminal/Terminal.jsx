@@ -75,7 +75,7 @@ export function Terminal({
                 Riff with your AI scene partner and keep the conversation going as long as you want.
               </li>
               <li className={styles.instructionItem}>
-                Press generate to create an image from your conversation.
+                Press the round generate icon to create an image from your conversation.
               </li>
             </ul>
           </div>

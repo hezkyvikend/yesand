@@ -13,6 +13,7 @@ export function TerminalInput({
   const [value, setValue] = useState('')
   const inputRef = useRef(null)
   const hasDraft = value.trim().length > 0
+  const canSubmit = typeof onSubmit === 'function' && hasDraft && !disabled
   const canGenerate = generateEnabled || (allowGenerateFromDraft && hasDraft)
 
   useEffect(() => {
@@ -21,14 +22,16 @@ export function TerminalInput({
     }
   }, [disabled])
 
+  function submitDraft() {
+    if (!canSubmit) return
+    onSubmit?.(value)
+    setValue('')
+  }
+
   function handleKeyDown(event) {
-    if (event.key === 'Enter') {
-      event.preventDefault()
-      const trimmed = value.trim()
-      if (!trimmed) return
-      onSubmit?.(value)
-      setValue('')
-    }
+    if (event.key !== 'Enter') return
+    event.preventDefault()
+    submitDraft()
   }
 
   return (
@@ -49,21 +52,40 @@ export function TerminalInput({
           autoCorrect="off"
           autoCapitalize="none"
         />
-        {showGenerate && (
+        <div className={styles.actions}>
           <button
             type="button"
-            className={styles.generateBtn}
-            disabled={!canGenerate}
-            onClick={() => {
-              onGenerate?.(value)
-              if (hasDraft) {
-                setValue('')
-              }
-            }}
+            className={styles.sendBtn}
+            disabled={!canSubmit}
+            onClick={submitDraft}
           >
-            generate
+            send
           </button>
-        )}
+          {showGenerate && (
+            <button
+              type="button"
+              className={styles.generateIconBtn}
+              disabled={!canGenerate}
+              aria-label="generate image"
+              title="Generate image"
+              onClick={() => {
+                onGenerate?.(value)
+                if (hasDraft) {
+                  setValue('')
+                }
+              }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className={styles.generateIcon}
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d="M12 2.5L14.5 9.5L21.5 12L14.5 14.5L12 21.5L9.5 14.5L2.5 12L9.5 9.5L12 2.5Z" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
