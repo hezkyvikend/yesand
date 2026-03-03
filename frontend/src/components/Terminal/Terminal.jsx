@@ -66,9 +66,18 @@ export function Terminal({
       {showInstruction ? (
         <>
           <div className={styles.instruction}>
-            <span>
-              yes,and.ai allows you to imagine collaboratively with an AI persona. Select a scene partner, chat it out, then see your scene come to life through an AI generated image.
-            </span>
+            <ul className={styles.instructionList}>
+              <li className={styles.instructionItem}>Select a scene partner from below.</li>
+              <li className={styles.instructionItem}>
+                Type your initial idea in response to the suggested word, then press Enter to send.
+              </li>
+              <li className={styles.instructionItem}>
+                Riff with your AI scene partner and keep the conversation going as long as you want.
+              </li>
+              <li className={styles.instructionItem}>
+                Press generate to create an image from your conversation.
+              </li>
+            </ul>
           </div>
           {showTranscript ? (
             <LoadingTranscript persona={state.persona} suggestionWord={state.suggestionWord} />
